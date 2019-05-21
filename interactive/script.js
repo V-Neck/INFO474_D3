@@ -2,17 +2,8 @@
 
 const source_url = "data/police_shootings.csv";
 
-// Parse Numerical Rows
-function row(d) {
-    d.year      = +d.year;
-    d.date      = Date.parse(d.date);
-    d.age       = +age;
-    d.zip       = +d.zip;
-    d.latitude  = +d.latitude;
-    d.longitude = d.longitude;
-    console.log(d);
-    return d;
-}
+const START_YEAR = 2000;
+const N_BINS = 5;
 
 // Format Map
 var margin = {top: 20, right: 20, bottom: 20, left: 20};
@@ -24,6 +15,7 @@ var projection = d3.geoAlbersUsa()
 		.translate([width / 2, height / 2]);
 
 var path = d3.geoPath();
+
 
 var mapSVG = d3.select("#map").append("svg")
     .attr("width", width + margin.left + margin.right)
@@ -91,16 +83,13 @@ function ready(error, us, shootings, state_pops, abv_to_state, fips_to_state, st
     var color_years = {};
 
     for(var year in number_killed){
-        if(+year <= 2015) {
-          console.log(year)
-          console.log(number_killed[year])
+        if(+year <= 2016) {
           var killed = number_killed[year]
           color_years[year] = d3.scaleQuantile()
                               .domain(killed)
-                              .range(d3.schemeBlues[5])
+                              .range(d3.schemeReds[N_BINS])
         }
     }
-
 
     function get_state_color(d, year) {
       var frac_died = null
@@ -119,19 +108,64 @@ function ready(error, us, shootings, state_pops, abv_to_state, fips_to_state, st
           .data(states)
           .enter().append("path")
           .attr("d", path)
+          .style("stroke", "#fff")
+          .style("stroke-width", "2")
           .attr("fill", function(d) {
-            get_state_color(d, 2001)
+            get_state_color(d, START_YEAR)
           })
 
+    var legend_width = 100;
+
     
+    mapSVG.append("g")
+    .attr("x", 200)
+    .append("text")
+    .text("Deaths per million people")
+    .attr("fill", "#000")
+    .attr("y", 640)
+
     function update(year){
       slider.property("value", year);
       d3.select(".year").text(year);
-      stateShapes.attr("fill", function(d) {
+
+      stateShapes.transition()
+      .attr("fill", function(d) {
         return get_state_color(d, year)
       });
-    } 
 
+      var legned_data = [];
+      var quantiles = [0].concat(color_years[year].quantiles())
+                       .concat(Math.max.apply(Math, number_killed[year]))
+
+      for (var i=0; i < N_BINS; i++) {
+        legnend_datum = {"idx": i, 
+                     "range": (Math.round(1e8 * quantiles[i])/1e2).toString() 
+                              + "-" + (Math.round(1e8 * quantiles[i + 1])/1e2).toString(),
+                     "color": color_years[year].range()[i]}
+        legned_data.push(legnend_datum)
+      }
+
+      mapSVG.append("g")
+      .selectAll("rect")
+      .data(legned_data).enter()
+      .append("rect")
+      .attr("height", legend_width / 5)
+      .attr("width", legend_width)
+      .attr("y", 650)
+      .attr("x", d => (d['idx'] * (legend_width + 1)))
+      .style("fill", c => c['color'])
+
+
+    mapSVG.append("g")
+          .selectAll("text")
+          .data(legned_data).enter()
+          .append("text")
+          .attr("class", "legend-text")
+          .attr("y", 650 + legend_width / 7)
+          .attr("x", d => (d['idx'] * legend_width + 5))
+          .text(d => d.range)
+          .attr("fill", "#fff")
+    }
     
     var slider = d3.select(".slider")
           .append("input")
@@ -142,7 +176,7 @@ function ready(error, us, shootings, state_pops, abv_to_state, fips_to_state, st
             .on("input", function() {
               var year = this.value;
               update(year);
-            });
+     });
       
-      update(2002);
+      update(START_YEAR);
   }
